@@ -10,8 +10,7 @@ import (
 
 	"doc-manager/models"
 	"doc-manager/resources"
-
-	"github.com/gocql/gocql"
+	"doc-manager/services"
 )
 
 const DocumentEventsChannel = "document_events"
@@ -62,14 +61,38 @@ func processDocumentMessage(payload string) {
 	log.Printf("[Redis Subscriber] Received document ID: %s, Name: %s, Size: %d bytes",
 		doc.ID, doc.Name, doc.Size)
 
-	// Run dummy processing logic with retries and random record selection
-	processedDoc, err := mockProcessingDocument(doc)
-	if err != nil {
-		log.Printf("[Redis Subscriber] Mock processing failed for document %s: %v", doc.ID, err)
-		return
+	// 1. Mark status as 'processing' in PostgreSQL
+	doc.Status = "processing"
+	doc.UpdatedAt = time.Now().UTC()
+	if resources.DB != nil {
+		_, err := resources.DB.Exec(
+			context.Background(),
+			`UPDATE documents SET status = $1, updated_at = NOW() WHERE id = $2`,
+			doc.Status,
+			doc.ID,
+		)
+		if err != nil {
+			log.Printf("[Postgres Update] Failed to update document %s to processing: %v", doc.ID, err)
+		} else {
+			log.Printf("[Postgres Update] Document %s status updated to 'processing'", doc.ID)
+		}
 	}
 
-	// Update PostgreSQL record status and extracted content if DB is available
+	// Record 'processing' event in Cassandra
+	services.RecordDocumentEvent(doc)
+
+	// 2. Run mock processing logic with retries and random record selection
+	processedDoc, err := mockProcessingDocument(doc)
+	if err != nil {
+		log.Printf("[Redis Subscriber] Mock processing returned error for document %s: %v", doc.ID, err)
+		processedDoc.Status = "failed"
+		errMsg := err.Error()
+		processedDoc.RejectionReason = &errMsg
+		processedDoc.ExtractedContent = nil
+		processedDoc.UpdatedAt = time.Now().UTC()
+	}
+
+	// 3. Update PostgreSQL record with terminal status (success or failed), extracted content, and rejection reason
 	if resources.DB != nil {
 		var extracted interface{}
 		if processedDoc.ExtractedContent != nil {
@@ -90,25 +113,10 @@ func processDocumentMessage(payload string) {
 		}
 	}
 
-	// Persist snapshot to Cassandra document_snapshots table
-	if resources.Session != nil {
-		docUUID, err := gocql.ParseUUID(processedDoc.ID)
-		if err != nil {
-			log.Printf("[Cassandra Snapshot] Invalid UUID %q: %v", processedDoc.ID, err)
-		} else {
-			snapshotJSON, _ := json.Marshal(processedDoc)
-			query := `INSERT INTO document_snapshots (document_id, status, db_snapshot, timestamp) VALUES (?, ?, ?, ?)`
-			now := time.Now().UTC()
-			if err := resources.Session.Query(query, docUUID, processedDoc.Status, string(snapshotJSON), now).Exec(); err != nil {
-				log.Printf("[Cassandra Snapshot] Failed to save snapshot for %s: %v", processedDoc.ID, err)
-			} else {
-				log.Printf("[Cassandra Snapshot] Successfully persisted snapshot for document %s (status: %s) at %s",
-					processedDoc.ID, processedDoc.Status, now.Format(time.RFC3339))
-			}
-		}
-	}
+	// 4. Persist terminal snapshot event to Cassandra
+	services.RecordDocumentEvent(processedDoc)
 
-	log.Printf("[Redis Subscriber] Finished processing document ID: %s", processedDoc.ID)
+	log.Printf("[Redis Subscriber] Finished processing document ID: %s (final status: %s)", processedDoc.ID, processedDoc.Status)
 }
 
 // mockProcessingDocument simulates document processing with S3 file download, time wait, 3 retries, and random record selection
@@ -118,31 +126,50 @@ func mockProcessingDocument(doc models.Document) (models.Document, error) {
 	sample3 := `{"extracted_text": "Employment Agreement Signed", "pages": 2, "ocr_confidence": 0.99}`
 	sample4 := `{"extracted_text": "Hardware Purchase Receipt", "pages": 1, "ocr_confidence": 0.91}`
 
-	// Dummy array of records to be chosen randomly
+	reason1 := "Corrupted image data or unreadable scan quality"
+	reason2 := "Unsupported document structure or missing required header fields"
+	reason3 := "Document exceeds maximum parsing limit or contains security violation"
+
+	// Dummy array of records with success and failed outcomes
 	dummyRecords := []struct {
 		status           string
 		extractedContent *string
 		rejectionReason  *string
 	}{
 		{
-			status:           "processed",
+			status:           "success",
 			extractedContent: &sample1,
 			rejectionReason:  nil,
 		},
 		{
-			status:           "processed",
+			status:           "success",
 			extractedContent: &sample2,
 			rejectionReason:  nil,
 		},
 		{
-			status:           "completed",
+			status:           "success",
 			extractedContent: &sample3,
 			rejectionReason:  nil,
 		},
 		{
-			status:           "completed",
+			status:           "success",
 			extractedContent: &sample4,
 			rejectionReason:  nil,
+		},
+		{
+			status:           "failed",
+			extractedContent: nil,
+			rejectionReason:  &reason1,
+		},
+		{
+			status:           "failed",
+			extractedContent: nil,
+			rejectionReason:  &reason2,
+		},
+		{
+			status:           "failed",
+			extractedContent: nil,
+			rejectionReason:  &reason3,
 		},
 	}
 
@@ -191,5 +218,12 @@ func mockProcessingDocument(doc models.Document) (models.Document, error) {
 		return doc, nil
 	}
 
-	return doc, fmt.Errorf("failed to process document after %d attempts: %w", maxRetries, lastErr)
+	// If max retries reached without success, mark as failed with rejection reason
+	doc.Status = "failed"
+	failReason := fmt.Sprintf("failed to process document after %d attempts: %v", maxRetries, lastErr)
+	doc.RejectionReason = &failReason
+	doc.ExtractedContent = nil
+	doc.UpdatedAt = time.Now().UTC()
+
+	return doc, nil
 }

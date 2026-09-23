@@ -9,7 +9,7 @@ import (
 // StartDocExpiryCron runs the SetDocExpiry job periodically at the specified interval
 func StartDocExpiryCron(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {
-		interval = 10 * time.Minute
+		interval = 1 * time.Hour
 	}
 
 	log.Printf("[Doc Expiry Cron] Starting expiry cron worker (interval: %v)...", interval)

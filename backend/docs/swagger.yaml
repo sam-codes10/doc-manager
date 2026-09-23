@@ -10,6 +10,8 @@ definitions:
     type: object
   models.Document:
     properties:
+      content_hash:
+        type: string
       created_at:
         type: string
       extracted_content:
@@ -19,6 +21,8 @@ definitions:
       mime_type:
         type: string
       name:
+        type: string
+      optional_meta:
         type: string
       path:
         type: string
@@ -31,11 +35,22 @@ definitions:
       updated_at:
         type: string
     type: object
+  models.DocumentSnapshot:
+    properties:
+      db_snapshot:
+        type: string
+      document_id:
+        type: string
+      status:
+        type: string
+      timestamp:
+        type: string
+    type: object
 host: localhost:8080
 info:
   contact: {}
-  description: Document Management Service API with PostgreSQL, Redis, and Cassandra
-    datastores.
+  description: Document Management Service API with PostgreSQL, Redis, Cassandra,
+    and S3 datastores.
   title: Doc Manager API
   version: "1.0"
 paths:
@@ -44,7 +59,7 @@ paths:
       consumes:
       - multipart/form-data
       description: Accepts a file (CSV, PDF, etc.) with metadata, stores record in
-        DB as 'uploaded', and starts async background processing
+        DB, prevents duplicate uploads via content_hash, and starts async processing
       parameters:
       - description: Document file to upload
         in: formData
@@ -75,11 +90,50 @@ paths:
           description: Missing file or invalid parameters
           schema:
             $ref: '#/definitions/apihelpers.ApiRes'
+        "409":
+          description: 'Duplicate document: identical name and content'
+          schema:
+            $ref: '#/definitions/apihelpers.ApiRes'
         "500":
           description: Server or database error
           schema:
             $ref: '#/definitions/apihelpers.ApiRes'
       summary: Upload and accept a document
+      tags:
+      - documents
+  /documents/{id}/events:
+    get:
+      description: Queries Cassandra for all historical event snapshots and status
+        transitions for a given document UUID
+      parameters:
+      - description: Document UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Events retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/apihelpers.ApiRes'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/models.DocumentSnapshot'
+                  type: array
+              type: object
+        "400":
+          description: Invalid document ID format
+          schema:
+            $ref: '#/definitions/apihelpers.ApiRes'
+        "500":
+          description: Server or database error
+          schema:
+            $ref: '#/definitions/apihelpers.ApiRes'
+      summary: Get document event history
       tags:
       - documents
 swagger: "2.0"

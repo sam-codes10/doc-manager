@@ -19,11 +19,11 @@ func TestSetDocExpiry(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Insert a test document created 10 minutes ago
+	// Insert a test document created 2 hours ago
 	var docID string
 	err := resources.DB.QueryRow(ctx, `
 		INSERT INTO documents (name, status, created_at, updated_at)
-		VALUES ('expiry_test.pdf', 'uploaded', NOW() - INTERVAL '10 minutes', NOW() - INTERVAL '10 minutes')
+		VALUES ('expiry_test.pdf', 'uploaded', NOW() - INTERVAL '2 hours', NOW() - INTERVAL '2 hours')
 		RETURNING id
 	`).Scan(&docID)
 	if err != nil {

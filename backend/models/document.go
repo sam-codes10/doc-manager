@@ -5,6 +5,7 @@ import "time"
 type Document struct {
 	ID               string    `json:"id"`
 	Name             string    `json:"name"`
+	ContentHash      string    `json:"content_hash"`
 	Path             string    `json:"path"`
 	Size             int64     `json:"size"`
 	MimeType         string    `json:"mime_type"`

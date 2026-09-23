@@ -7,7 +7,7 @@ import (
 	"doc-manager/resources"
 )
 
-// SetDocExpiry updates the status of all documents older than 5 minutes from 'uploaded' to 'expired'
+// SetDocExpiry updates the status of all documents older than 1 hour from 'uploaded' or 's3 uploaded' to 'expired'
 func SetDocExpiry(ctxOpt ...context.Context) {
 	ctx := context.Background()
 	if len(ctxOpt) > 0 && ctxOpt[0] != nil {
@@ -23,8 +23,8 @@ func SetDocExpiry(ctxOpt ...context.Context) {
 		UPDATE documents
 		SET status = 'expired',
 		    updated_at = NOW()
-		WHERE status = 'uploaded'
-		  AND created_at < NOW() - INTERVAL '5 minutes'
+		WHERE status IN ('uploaded', 's3 uploaded')
+		  AND created_at < NOW() - INTERVAL '1 hour'
 	`
 
 	tag, err := resources.DB.Exec(ctx, query)

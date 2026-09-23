@@ -18,6 +18,7 @@ func InitRouters() *gin.Engine {
 	apis := r.Group("/api")
 	{
 		apis.POST("/documents", controllers.AcceptDocument)
+		apis.GET("/documents/:id/events", controllers.GetDocumentEvents)
 	}
 
 	return r

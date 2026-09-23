@@ -17,7 +17,7 @@ const docTemplate = `{
     "paths": {
         "/documents": {
             "post": {
-                "description": "Accepts a file (CSV, PDF, etc.) with metadata, stores record in DB as 'uploaded', and starts async background processing",
+                "description": "Accepts a file (CSV, PDF, etc.) with metadata, stores record in DB, prevents duplicate uploads via content_hash, and starts async processing",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -74,6 +74,68 @@ const docTemplate = `{
                             "$ref": "#/definitions/apihelpers.ApiRes"
                         }
                     },
+                    "409": {
+                        "description": "Duplicate document: identical name and content",
+                        "schema": {
+                            "$ref": "#/definitions/apihelpers.ApiRes"
+                        }
+                    },
+                    "500": {
+                        "description": "Server or database error",
+                        "schema": {
+                            "$ref": "#/definitions/apihelpers.ApiRes"
+                        }
+                    }
+                }
+            }
+        },
+        "/documents/{id}/events": {
+            "get": {
+                "description": "Queries Cassandra for all historical event snapshots and status transitions for a given document UUID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "documents"
+                ],
+                "summary": "Get document event history",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Document UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Events retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/apihelpers.ApiRes"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/models.DocumentSnapshot"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid document ID format",
+                        "schema": {
+                            "$ref": "#/definitions/apihelpers.ApiRes"
+                        }
+                    },
                     "500": {
                         "description": "Server or database error",
                         "schema": {
@@ -100,6 +162,9 @@ const docTemplate = `{
         "models.Document": {
             "type": "object",
             "properties": {
+                "content_hash": {
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -113,6 +178,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "name": {
+                    "type": "string"
+                },
+                "optional_meta": {
                     "type": "string"
                 },
                 "path": {
@@ -131,6 +199,23 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "models.DocumentSnapshot": {
+            "type": "object",
+            "properties": {
+                "db_snapshot": {
+                    "type": "string"
+                },
+                "document_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
         }
     }
 }`
@@ -142,7 +227,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/api",
 	Schemes:          []string{},
 	Title:            "Doc Manager API",
-	Description:      "Document Management Service API with PostgreSQL, Redis, and Cassandra datastores.",
+	Description:      "Document Management Service API with PostgreSQL, Redis, Cassandra, and S3 datastores.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

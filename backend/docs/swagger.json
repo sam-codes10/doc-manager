@@ -1,7 +1,7 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "Document Management Service API with PostgreSQL, Redis, and Cassandra datastores.",
+        "description": "Document Management Service API with PostgreSQL, Redis, Cassandra, and S3 datastores.",
         "title": "Doc Manager API",
         "contact": {},
         "version": "1.0"
@@ -11,7 +11,7 @@
     "paths": {
         "/documents": {
             "post": {
-                "description": "Accepts a file (CSV, PDF, etc.) with metadata, stores record in DB as 'uploaded', and starts async background processing",
+                "description": "Accepts a file (CSV, PDF, etc.) with metadata, stores record in DB, prevents duplicate uploads via content_hash, and starts async processing",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -68,6 +68,68 @@
                             "$ref": "#/definitions/apihelpers.ApiRes"
                         }
                     },
+                    "409": {
+                        "description": "Duplicate document: identical name and content",
+                        "schema": {
+                            "$ref": "#/definitions/apihelpers.ApiRes"
+                        }
+                    },
+                    "500": {
+                        "description": "Server or database error",
+                        "schema": {
+                            "$ref": "#/definitions/apihelpers.ApiRes"
+                        }
+                    }
+                }
+            }
+        },
+        "/documents/{id}/events": {
+            "get": {
+                "description": "Queries Cassandra for all historical event snapshots and status transitions for a given document UUID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "documents"
+                ],
+                "summary": "Get document event history",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Document UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Events retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/apihelpers.ApiRes"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/models.DocumentSnapshot"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid document ID format",
+                        "schema": {
+                            "$ref": "#/definitions/apihelpers.ApiRes"
+                        }
+                    },
                     "500": {
                         "description": "Server or database error",
                         "schema": {
@@ -94,6 +156,9 @@
         "models.Document": {
             "type": "object",
             "properties": {
+                "content_hash": {
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -109,6 +174,9 @@
                 "name": {
                     "type": "string"
                 },
+                "optional_meta": {
+                    "type": "string"
+                },
                 "path": {
                     "type": "string"
                 },
@@ -122,6 +190,23 @@
                     "type": "string"
                 },
                 "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.DocumentSnapshot": {
+            "type": "object",
+            "properties": {
+                "db_snapshot": {
+                    "type": "string"
+                },
+                "document_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "timestamp": {
                     "type": "string"
                 }
             }

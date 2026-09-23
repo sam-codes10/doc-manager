@@ -32,3 +32,17 @@ func TestSwaggerEndpoint(t *testing.T) {
 		t.Fatalf("expected status 200 for /swagger/doc.json, got %d: %s", wDoc.Code, wDoc.Body.String())
 	}
 }
+
+func TestDocumentEventsRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := InitRouters()
+
+	// An invalid UUID should reach the handler and return 400 Bad Request (not 404 Route Not Found)
+	req, _ := http.NewRequest(http.MethodGet, "/api/documents/invalid-uuid/events", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 Bad Request for invalid UUID, got %d", w.Code)
+	}
+}

@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  cassandra:
+    image: cassandra:4.1
+    container_name: doc-manager-cassandra
+    ports:
+      - "9042:9042"
+    environment:
+      - MAX_HEAP_SIZE=1G
+      - HEAP_NEWSIZE=256M
+      - CASSANDRA_BROADCAST_ADDRESS=127.0.0.1
+      - CASSANDRA_RPC_ADDRESS=0.0.0.0
+    restart: unless-stopped
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+
+volumes:
+  cassandra_data:

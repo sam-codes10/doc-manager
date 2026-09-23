@@ -1,0 +1,130 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "Document Management Service API with PostgreSQL, Redis, and Cassandra datastores.",
+        "title": "Doc Manager API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "host": "localhost:8080",
+    "basePath": "/api",
+    "paths": {
+        "/documents": {
+            "post": {
+                "description": "Accepts a file (CSV, PDF, etc.) with metadata, stores record in DB as 'uploaded', and starts async background processing",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "documents"
+                ],
+                "summary": "Upload and accept a document",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "Document file to upload",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "MIME type or file format (e.g. pdf, csv)",
+                        "name": "typeOfFile",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Optional metadata in JSON or plain text format",
+                        "name": "optionalMeta",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Document accepted successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/apihelpers.ApiRes"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.Document"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Missing file or invalid parameters",
+                        "schema": {
+                            "$ref": "#/definitions/apihelpers.ApiRes"
+                        }
+                    },
+                    "500": {
+                        "description": "Server or database error",
+                        "schema": {
+                            "$ref": "#/definitions/apihelpers.ApiRes"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "apihelpers.ApiRes": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "message": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "models.Document": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "extracted_content": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "mime_type": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "rejection_reason": {
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,68 @@
+version: '3'
+
+vars:
+  BACKEND_DIR: backend
+  FRONTEND_DIR: frontend
+
+tasks:
+  default:
+    desc: List all available tasks
+    cmds:
+      - task --list
+    silent: true
+
+  install:
+    desc: Install backend Go modules and frontend npm dependencies
+    cmds:
+      - echo "==> Downloading Go modules for backend..."
+      - cd {{.BACKEND_DIR}} && go mod download
+      - echo "==> Installing npm packages for frontend..."
+      - cd {{.FRONTEND_DIR}} && npm install
+
+  backend:
+    desc: Start the Go backend server on :8080
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - go run main.go
+
+  frontend:
+    desc: Start the Vite React frontend dev server on :5173 (proxies /api to backend, avoiding CORS)
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - npm run dev
+
+  dev:
+    desc: Start both backend and frontend servers concurrently
+    deps:
+      - backend
+      - frontend
+
+  test:backend:
+    desc: Run backend Go test suite
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - go test -v ./...
+
+  test:
+    desc: Run backend test suite and verify frontend build
+    cmds:
+      - task: test:backend
+      - cd {{.FRONTEND_DIR}} && npm run build
+
+  docker:up:
+    desc: Start background datastores (Cassandra) via docker-compose
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - docker compose up -d
+
+  docker:down:
+    desc: Stop docker-compose containers
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - docker compose down
+
+  swagger:
+    desc: Regenerate Swagger API docs using swag CLI
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - swag init

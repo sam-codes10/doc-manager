@@ -1,0 +1,13 @@
+{
+  "name": "doc-manager-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DocManager workspace root",
+  "scripts": {
+    "dev": "task dev",
+    "backend": "task backend",
+    "frontend": "task frontend",
+    "install:all": "task install",
+    "test": "task test"
+  }
+}

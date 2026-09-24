@@ -46,3 +46,20 @@ func TestDocumentEventsRoute(t *testing.T) {
 		t.Fatalf("expected status 400 Bad Request for invalid UUID, got %d", w.Code)
 	}
 }
+
+func TestCORSHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := InitRouters()
+
+	// Preflight OPTIONS request
+	req, _ := http.NewRequest(http.MethodOptions, "/api/documents", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected status 204 for OPTIONS request, got %d", w.Code)
+	}
+	if origin := w.Header().Get("Access-Control-Allow-Origin"); origin != "*" {
+		t.Errorf("expected Access-Control-Allow-Origin: *, got %q", origin)
+	}
+}
